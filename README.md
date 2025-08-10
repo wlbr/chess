@@ -1,4 +1,4 @@
-# gochess
+# chess
 
 
 Chess game with computer opponent. Simple, but good enough to beat me.

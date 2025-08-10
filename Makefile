@@ -1,4 +1,4 @@
-LINKERFLAGS = -X main.Version=`git describe --tags --always --dirty` -X main.BuildTimestamp=`date -u '+%Y-%m-%d_%I:%M:%S_UTC'`
+LINKERFLAGS = -X github.com/wlbr/chess.Version=`git describe --tags --always --dirty` -X github.com/wlbr/chess.BuildTimestamp=`date -u '+%Y-%m-%d_%I:%M:%S_UTC'`
 PROJECTROOT = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 all: clean build

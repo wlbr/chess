@@ -38,6 +38,6 @@ func ShowVersion() {
 	if err != nil {
 		btime = time.Now()
 	}
-	fmt.Printf("%s - version %s built on %s \n", AppName, Version, btime.Format("02.01.2006 - 15:04:05 MST"), runtime.Version())
+	fmt.Printf("%s - version %s built on %s \n", AppName, Version, btime.Format("02.01.2006 - 15:04:05 MST"))
 	os.Exit(0)
 }

@@ -1,0 +1,29 @@
+LINKERFLAGS = -X main.Version=`git describe --tags --always --dirty` -X main.BuildTimestamp=`date -u '+%Y-%m-%d_%I:%M:%S_UTC'`
+PROJECTROOT = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+
+all: clean build
+
+.PHONY: clean
+clean:
+	@echo Running clean job...
+	cd $(PROJECTROOT) && rm -rf bin/
+	go fmt ./...
+
+dep:
+	@echo Running dep job...
+	go mod tidy
+
+generate:
+	@echo Running generate job...
+	go generate ./...
+
+build: clean dep generate
+	@echo Running build job...
+	mkdir -p bin
+#	GOOS=linux GOARCH=amd64 go build -ldflags "$(LINKERFLAGS)" -o bin/ ./...
+	go build -ldflags "$(LINKERFLAGS)" -o bin/ ./...
+
+run:
+	@echo Running run job...
+	go run -ldflags "$(LINKERFLAGS)"  cmd/chess/main.go
+

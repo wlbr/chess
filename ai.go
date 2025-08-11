@@ -4,10 +4,12 @@ import (
 	"math"
 )
 
-func FindBestMove(board *Board, color Color, depth int) (Position, Position) {
+func FindBestMove(game *Game, depth int) (Position, Position) {
 	bestScore := math.Inf(-1)
 	var bestMoveFrom Position
 	var bestMoveTo Position
+	board := game.Board()
+	color := game.Turn()
 
 	for r1 := 0; r1 < 8; r1++ {
 		for c1 := 0; c1 < 8; c1++ {
@@ -17,11 +19,11 @@ func FindBestMove(board *Board, color Color, depth int) (Position, Position) {
 				for r2 := 0; r2 < 8; r2++ {
 					for c2 := 0; c2 < 8; c2++ {
 						to := Position{Row: r2, Col: c2}
-						if IsValidMove(board, from, to) {
+						if IsValidMove(board, game.MoveLog(), from, to) {
 							tempBoard := board.Clone()
 							tempBoard.MovePiece(from, to)
 
-							score := minimax(tempBoard, depth-1, false, color)
+							score := minimax(tempBoard, game.MoveLog(), depth-1, false, color)
 							if score > bestScore {
 								bestScore = score
 								bestMoveFrom = from
@@ -36,7 +38,7 @@ func FindBestMove(board *Board, color Color, depth int) (Position, Position) {
 	return bestMoveFrom, bestMoveTo
 }
 
-func minimax(board *Board, depth int, isMaximizingPlayer bool, color Color) float64 {
+func minimax(board *Board, moveLog *MoveLog, depth int, isMaximizingPlayer bool, color Color) float64 {
 	if depth == 0 {
 		return evaluate(board, color)
 	}
@@ -51,10 +53,10 @@ func minimax(board *Board, depth int, isMaximizingPlayer bool, color Color) floa
 					for r2 := 0; r2 < 8; r2++ {
 						for c2 := 0; c2 < 8; c2++ {
 							to := Position{Row: r2, Col: c2}
-							if IsValidMove(board, from, to) {
+							if IsValidMove(board, moveLog, from, to) {
 								tempBoard := board.Clone()
 								tempBoard.MovePiece(from, to)
-								score := minimax(tempBoard, depth-1, false, color)
+								score := minimax(tempBoard, moveLog, depth-1, false, color)
 								bestScore = math.Max(bestScore, score)
 							}
 						}
@@ -73,10 +75,10 @@ func minimax(board *Board, depth int, isMaximizingPlayer bool, color Color) floa
 					for r2 := 0; r2 < 8; r2++ {
 						for c2 := 0; c2 < 8; c2++ {
 							to := Position{Row: r2, Col: c2}
-							if IsValidMove(board, from, to) {
+							if IsValidMove(board, moveLog, from, to) {
 								tempBoard := board.Clone()
 								tempBoard.MovePiece(from, to)
-								score := minimax(tempBoard, depth-1, true, color)
+								score := minimax(tempBoard, moveLog, depth-1, true, color)
 								bestScore = math.Min(bestScore, score)
 							}
 						}

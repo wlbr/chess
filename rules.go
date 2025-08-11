@@ -1,15 +1,14 @@
 package chess
 
-func IsValidMove(board *Board, from, to Position) bool {
+func IsValidMove(board *Board, moveLog *MoveLog, from, to Position) bool {
 	piece := board[from.Row][from.Col]
 	if piece == nil {
 		return false
 	}
 
 	switch piece.Type() {
-	//case Pawn:
 	case Pawn:
-		return isValidPawnMove(board, from, to)
+		return isValidPawnMove(board, moveLog, from, to)
 	case Rook:
 		return isValidRookMove(board, from, to)
 	case Knight:
@@ -19,49 +18,58 @@ func IsValidMove(board *Board, from, to Position) bool {
 	case Queen:
 		return isValidQueenMove(board, from, to)
 	case King:
-		return isValidKingMove(board, from, to)
+		return isValidKingMove(board, moveLog, from, to)
 	}
 
 	return false
 }
 
-func isValidPawnMove(board *Board, from, to Position) bool {
+func isValidPawnMove(board *Board, moveLog *MoveLog, from, to Position) bool {
 	piece := board.PieceAt(from.Row, from.Col)
 	dx := to.Col - from.Col
 	dy := to.Row - from.Row
 
 	if piece.Color() == White {
-		// Move forward
-		if dx == 0 && board.PieceAt(to.Row, to.Col) == nil {
-			if dy == -1 {
-				return true
-			}
-			// Move two squares from starting position
-			if from.Row == 6 && dy == -2 && board.PieceAt(from.Row-1, from.Col) == nil {
-				return true
-			}
+		// Standard 1-step forward
+		if dx == 0 && dy == -1 && board.PieceAt(to.Row, to.Col) == nil {
+			return true
 		}
-		// Capture
+		// Standard 2-step forward
+		if from.Row == 6 && dx == 0 && dy == -2 && board.PieceAt(to.Row, to.Col) == nil && board.PieceAt(from.Row-1, from.Col) == nil {
+			return true
+		}
+		// Standard capture
 		if Abs(dx) == 1 && dy == -1 && board.PieceAt(to.Row, to.Col) != nil && board.PieceAt(to.Row, to.Col).Color() == Black {
 			return true
 		}
-	} else {
-		// Move forward
-		if dx == 0 && board.PieceAt(to.Row, to.Col) == nil {
-			if dy == 1 {
-				return true
-			}
-			// Move two squares from starting position
-			if from.Row == 1 && dy == 2 && board.PieceAt(from.Row+1, from.Col) == nil {
+		// En passant capture
+		if from.Row == 3 && Abs(dx) == 1 && dy == -1 && board.PieceAt(to.Row, to.Col) == nil {
+			lastMove := moveLog.LastMove()
+			if lastMove != nil && lastMove.piece.Type() == Pawn && lastMove.to.Row == 3 && lastMove.to.Col == to.Col && Abs(lastMove.from.Row-lastMove.to.Row) == 2 {
 				return true
 			}
 		}
-		// Capture
+	} else { // Black
+		// Standard 1-step forward
+		if dx == 0 && dy == 1 && board.PieceAt(to.Row, to.Col) == nil {
+			return true
+		}
+		// Standard 2-step forward
+		if from.Row == 1 && dx == 0 && dy == 2 && board.PieceAt(to.Row, to.Col) == nil && board.PieceAt(from.Row+1, from.Col) == nil {
+			return true
+		}
+		// Standard capture
 		if Abs(dx) == 1 && dy == 1 && board.PieceAt(to.Row, to.Col) != nil && board.PieceAt(to.Row, to.Col).Color() == White {
 			return true
 		}
+		// En passant capture
+		if from.Row == 4 && Abs(dx) == 1 && dy == 1 && board.PieceAt(to.Row, to.Col) == nil {
+			lastMove := moveLog.LastMove()
+			if lastMove != nil && lastMove.piece.Type() == Pawn && lastMove.to.Row == 4 && lastMove.to.Col == to.Col && Abs(lastMove.from.Row-lastMove.to.Row) == 2 {
+				return true
+			}
+		}
 	}
-
 	return false
 }
 
@@ -145,8 +153,8 @@ func isValidQueenMove(board *Board, from, to Position) bool {
 	return isValidRookMove(board, from, to) || isValidBishopMove(board, from, to)
 }
 
-func isValidKingMove(board *Board, from, to Position) bool {
-	if isValidCastling(board, from, to) {
+func isValidKingMove(board *Board, moveLog *MoveLog, from, to Position) bool {
+	if isValidCastling(board, moveLog, from, to) {
 		return true
 	}
 	dx := Abs(to.Col - from.Col)
@@ -159,7 +167,7 @@ func isValidKingMove(board *Board, from, to Position) bool {
 	return board.PieceAt(to.Row, to.Col) == nil || board.PieceAt(to.Row, to.Col).Color() != board.PieceAt(from.Row, from.Col).Color()
 }
 
-func IsCheck(board *Board, color Color) bool {
+func IsCheck(board *Board, moveLog *MoveLog, color Color) bool {
 	kingPos := findKing(board, color)
 	if kingPos == nil {
 		return false
@@ -169,7 +177,7 @@ func IsCheck(board *Board, color Color) bool {
 		for c := 0; c < 8; c++ {
 			piece := board.PieceAt(r, c)
 			if piece != nil && piece.Color() != color {
-				if IsValidMove(board, Position{Row: r, Col: c}, *kingPos) {
+				if IsValidMove(board, moveLog, Position{Row: r, Col: c}, *kingPos) {
 					return true
 				}
 			}
@@ -198,8 +206,8 @@ func Abs(x int) int {
 	return x
 }
 
-func IsCheckmate(board *Board, color Color) bool {
-	if !IsCheck(board, color) {
+func IsCheckmate(board *Board, moveLog *MoveLog, color Color) bool {
+	if !IsCheck(board, moveLog, color) {
 		return false
 	}
 
@@ -210,13 +218,13 @@ func IsCheckmate(board *Board, color Color) bool {
 				for r2 := 0; r2 < 8; r2++ {
 					for c2 := 0; c2 < 8; c2++ {
 						to := Position{Row: r2, Col: c2}
-						if IsValidMove(board, Position{Row: r, Col: c}, to) {
+						if IsValidMove(board, moveLog, Position{Row: r, Col: c}, to) {
 							// Make the move on a temporary board
 							tempBoard := board.Clone()
 							tempBoard.MovePiece(Position{Row: r, Col: c}, to)
 
 							// Check if the king is in check
-							if !IsCheck(tempBoard, color) {
+							if !IsCheck(tempBoard, moveLog, color) {
 								return false
 							}
 						}
@@ -229,8 +237,8 @@ func IsCheckmate(board *Board, color Color) bool {
 	return true
 }
 
-func IsStalemate(board *Board, color Color) bool {
-	if IsCheck(board, color) {
+func IsStalemate(board *Board, moveLog *MoveLog, color Color) bool {
+	if IsCheck(board, moveLog, color) {
 		return false
 	}
 
@@ -241,13 +249,13 @@ func IsStalemate(board *Board, color Color) bool {
 				for r2 := 0; r2 < 8; r2++ {
 					for c2 := 0; c2 < 8; c2++ {
 						to := Position{Row: r2, Col: c2}
-						if IsValidMove(board, Position{Row: r, Col: c}, to) {
+						if IsValidMove(board, moveLog, Position{Row: r, Col: c}, to) {
 							// Make the move on a temporary board
 							tempBoard := board.Clone()
 							tempBoard.MovePiece(Position{Row: r, Col: c}, to)
 
 							// Check if the king is in check
-							if !IsCheck(tempBoard, color) {
+							if !IsCheck(tempBoard, moveLog, color) {
 								return false
 							}
 						}
@@ -295,7 +303,7 @@ func boardsEqual(b1, b2 *Board) bool {
 	return true
 }
 
-func isValidCastling(board *Board, from, to Position) bool {
+func isValidCastling(board *Board, moveLog *MoveLog, from, to Position) bool {
 	piece := board.PieceAt(from.Row, from.Col)
 	if piece == nil || piece.Type() != King || piece.HasMoved() {
 		return false
@@ -309,7 +317,7 @@ func isValidCastling(board *Board, from, to Position) bool {
 	}
 
 	// Check if king is in check
-	if IsCheck(board, piece.Color()) {
+	if IsCheck(board, moveLog, piece.Color()) {
 		return false
 	}
 
@@ -323,7 +331,7 @@ func isValidCastling(board *Board, from, to Position) bool {
 			return false
 		}
 		// Check if squares king moves through are under attack
-		if isSquareAttacked(board, from.Row, from.Col+1, piece.Color()) || isSquareAttacked(board, from.Row, from.Col+2, piece.Color()) {
+		if isSquareAttacked(board, moveLog, from.Row, from.Col+1, piece.Color()) || isSquareAttacked(board, moveLog, from.Row, from.Col+2, piece.Color()) {
 			return false
 		}
 	} else { // Queenside castling
@@ -335,7 +343,7 @@ func isValidCastling(board *Board, from, to Position) bool {
 			return false
 		}
 		// Check if squares king moves through are under attack
-		if isSquareAttacked(board, from.Row, from.Col-1, piece.Color()) || isSquareAttacked(board, from.Row, from.Col-2, piece.Color()) {
+		if isSquareAttacked(board, moveLog, from.Row, from.Col-1, piece.Color()) || isSquareAttacked(board, moveLog, from.Row, from.Col-2, piece.Color()) {
 			return false
 		}
 	}
@@ -343,12 +351,12 @@ func isValidCastling(board *Board, from, to Position) bool {
 	return true
 }
 
-func isSquareAttacked(board *Board, row, col int, color Color) bool {
+func isSquareAttacked(board *Board, moveLog *MoveLog, row, col int, color Color) bool {
 	for r := 0; r < 8; r++ {
 		for c := 0; c < 8; c++ {
 			piece := board.PieceAt(r, c)
 			if piece != nil && piece.Color() != color {
-				if IsValidMove(board, Position{Row: r, Col: c}, Position{Row: row, Col: col}) {
+				if IsValidMove(board, moveLog, Position{Row: r, Col: c}, Position{Row: row, Col: col}) {
 					return true
 				}
 			}

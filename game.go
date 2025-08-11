@@ -8,6 +8,7 @@ type Game struct {
 	cursor       *Position
 	moveLog      *MoveLog
 	boardHistory []*Board
+	status       string
 }
 
 func (g *Game) Board() *Board {
@@ -48,6 +49,14 @@ func (g *Game) BoardHistory() []*Board {
 
 func (g *Game) AddToBoardHistory(history *Board) {
 	g.boardHistory = append(g.boardHistory, history)
+}
+
+func (g *Game) Status() string {
+	return g.status
+}
+
+func (g *Game) SetStatus(s string) {
+	g.status = s
 }
 
 // Position represents a position on the board

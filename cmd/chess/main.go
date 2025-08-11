@@ -3,10 +3,17 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/wlbr/chess"
 
 	"github.com/nsf/termbox-go"
+)
+
+const (
+	boardHeight   = 9
+	messageRow    = boardHeight + 1
+	messageHeight = 4
 )
 
 var game *chess.Game
@@ -20,24 +27,25 @@ func main() {
 	}
 	defer termbox.Close()
 
-	drawMenu()
+	for {
+		drawMenu()
+		mode := waitForModeChoice()
+		switch mode {
+		case '1':
+			playVSPlayer()
+		case '2':
+			playAgainstAI()
+		case 'q':
+			return
+		}
+	}
+}
 
+func waitForModeChoice() rune {
 	for {
 		ev := termbox.PollEvent()
 		if ev.Type == termbox.EventKey {
-			switch ev.Ch {
-			case '1':
-				playVSPlayer()
-				return
-			case '2':
-				playAgainstAI()
-				return
-			case '3':
-				exportPGN()
-				return
-			case 'q':
-				return
-			}
+			return ev.Ch
 		}
 	}
 }
@@ -47,8 +55,7 @@ func drawMenu() {
 	msg1 := "Choose game mode:"
 	msg2 := "1. Player vs Player"
 	msg3 := "2. Player vs AI"
-	msg4 := "3. Export PGN"
-	msg5 := "q. Quit"
+	msg4 := "q. Quit"
 	for i, r := range msg1 {
 		termbox.SetCell(i, 0, r, termbox.ColorWhite, termbox.ColorDefault)
 	}
@@ -61,32 +68,40 @@ func drawMenu() {
 	for i, r := range msg4 {
 		termbox.SetCell(i, 4, r, termbox.ColorWhite, termbox.ColorDefault)
 	}
-	for i, r := range msg5 {
-		termbox.SetCell(i, 5, r, termbox.ColorWhite, termbox.ColorDefault)
-	}
 	termbox.Flush()
 }
 
 func playVSPlayer() {
 	game = chess.NewGame()
-	drawBoard()
+	gameLoop(false)
+}
 
+func playAgainstAI() {
+	game = chess.NewGame()
+	gameLoop(true)
+}
+
+func gameLoop(ai bool) {
 	for {
-		if chess.IsCheckmate(game.Board(), game.Turn()) {
-			drawMessage("Checkmate!")
-			break
+		drawEverything()
+
+		if handleEndGameConditions() {
+			return
 		}
-		if chess.IsStalemate(game.Board(), game.Turn()) {
-			drawMessage("Stalemate!")
-			break
-		}
-		if chess.IsThreefoldRepetition(game.BoardHistory()) {
-			drawMessage("Threefold repetition!")
-			break
+
+		if ai && game.Turn() == chess.Black {
+			from, to := chess.FindBestMove(game, 3)
+			piece := game.Board().PieceAt(from.Row, from.Col)
+			finalizeMove(from, to, *piece, nil)
+			continue
 		}
 
 		ev := termbox.PollEvent()
 		if ev.Type == termbox.EventKey {
+			switch ev.Ch {
+			case 'e':
+				handleExport()
+			}
 			switch ev.Key {
 			case termbox.KeyEsc:
 				return
@@ -102,108 +117,99 @@ func playVSPlayer() {
 				selectPiece()
 			}
 		}
-		drawBoard()
-	}
-
-	// Wait for user to press Esc to exit
-	for {
-		ev := termbox.PollEvent()
-		if ev.Type == termbox.EventKey && ev.Key == termbox.KeyEsc {
-			break
-		}
 	}
 }
 
-func playAgainstAI() {
-	game = chess.NewGame()
+func drawEverything() {
+	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 	drawBoard()
+	drawMoveLog()
+	drawMessages(game.Status())
+	termbox.Flush()
+}
 
-	for {
-		if chess.IsCheckmate(game.Board(), game.Turn()) {
-			drawMessage("Checkmate!")
-			break
-		}
-		if chess.IsStalemate(game.Board(), game.Turn()) {
-			drawMessage("Stalemate!")
-			break
-		}
-		if chess.IsThreefoldRepetition(game.BoardHistory()) {
-			drawMessage("Threefold repetition!")
-			break
-		}
-
-		if game.Turn() == chess.White {
-			ev := termbox.PollEvent()
-			if ev.Type == termbox.EventKey {
-				switch ev.Key {
-				case termbox.KeyEsc:
-					return
-				case termbox.KeyArrowUp:
-					moveCursor(0, -1)
-				case termbox.KeyArrowDown:
-					moveCursor(0, 1)
-				case termbox.KeyArrowLeft:
-					moveCursor(-1, 0)
-				case termbox.KeyArrowRight:
-					moveCursor(1, 0)
-				case termbox.KeyEnter:
-					selectPiece()
-				}
-			}
-		} else {
-			from, to := chess.FindBestMove(game.Board(), chess.Black, 3)
-			piece := game.Board().PieceAt(from.Row, from.Col)
-			game.MoveLog().AddMove(from, to, *piece)
-			game.Board().MovePiece(from, to)
-			game.SetTurn(chess.White)
-		}
-
-		drawBoard()
+func handleEndGameConditions() bool {
+	var msg string
+	if chess.IsCheckmate(game.Board(), game.MoveLog(), game.Turn()) {
+		msg = "Checkmate!"
+	} else if chess.IsStalemate(game.Board(), game.MoveLog(), game.Turn()) {
+		msg = "Stalemate!"
+	} else if chess.IsThreefoldRepetition(game.BoardHistory()) {
+		msg = "Threefold repetition!"
 	}
 
-	// Wait for user to press Esc to exit
+	if msg != "" {
+		game.SetStatus(msg)
+		drawEverything()
+		drawMessages(game.Status(), "Export to PGN? (y/n)")
+		termbox.Flush()
+		waitForPGNChoice()
+		return true
+	}
+	return false
+}
+
+func waitForPGNChoice() {
 	for {
 		ev := termbox.PollEvent()
-		if ev.Type == termbox.EventKey && ev.Key == termbox.KeyEsc {
-			break
+		if ev.Type == termbox.EventKey {
+			switch ev.Ch {
+			case 'y':
+				msg := doExportPGN()
+				drawMessages(game.Status(), msg, "Press Esc to continue.")
+				termbox.Flush()
+				for {
+					ev := termbox.PollEvent()
+					if ev.Type == termbox.EventKey && ev.Key == termbox.KeyEsc {
+						return
+					}
+				}
+			case 'n':
+				return
+			}
 		}
 	}
 }
 
-func exportPGN() {
+func handleExport() {
+	msg := doExportPGN()
+	drawMessages(msg, "Press any key to continue.")
+	termbox.Flush()
+	for {
+		ev := termbox.PollEvent()
+		if ev.Type == termbox.EventKey {
+			return
+		}
+	}
+}
+
+func doExportPGN() string {
 	if game == nil || len(game.MoveLog().Moves()) == 0 {
-		drawMessage("No game to export.")
-		return
+		return "No game to export."
 	}
 
-	// TODO: prompt for filename
 	filename := "game.pgn"
 	pgn := chess.ExportToPGN(game.MoveLog())
 	file, err := os.Create(filename)
 	if err != nil {
-		drawMessage(fmt.Sprintf("Error creating file: %s", err.Error()))
-		return
+		return fmt.Sprintf("Error creating file: %s", err.Error())
 	}
 	defer file.Close()
 
 	_, err = file.WriteString(pgn)
 	if err != nil {
-		drawMessage(fmt.Sprintf("Error writing to file: %s", err.Error()))
-		return
+		return fmt.Sprintf("Error writing to file: %s", err.Error())
 	}
 
-	drawMessage(fmt.Sprintf("Game exported to %s", filename))
+	return fmt.Sprintf("Game exported to %s", filename)
 }
 
-func drawMessage(msg string) {
-	msg2 := "Press Esc to exit."
-	for i, r := range msg {
-		termbox.SetCell(i, 9, r, termbox.ColorWhite, termbox.ColorDefault)
+func drawMessages(messages ...string) {
+	for i, msg := range messages {
+		for j, r := range msg {
+			termbox.SetCell(j, messageRow+i, r, termbox.ColorWhite, termbox.ColorDefault)
+		}
 	}
-	for i, r := range msg2 {
-		termbox.SetCell(i, 10, r, termbox.ColorWhite, termbox.ColorDefault)
-	}
-	termbox.Flush()
 }
 
 func moveCursor(dx, dy int) {
@@ -231,47 +237,124 @@ func selectPiece() {
 			game.SetSelected(&chess.Position{Row: game.Cursor().Row, Col: game.Cursor().Col})
 		}
 	} else {
+		from := *game.Selected()
 		to := chess.Position{Row: game.Cursor().Row, Col: game.Cursor().Col}
-		if game.Selected().Row == to.Row && game.Selected().Col == to.Col {
-			game.SetSelected(nil)
+		game.SetSelected(nil)
+
+		if from.Row == to.Row && from.Col == to.Col {
 			return
 		}
 
-		if chess.IsValidMove(game.Board(), *game.Selected(), to) {
-			// Make the move on a temporary board
-			tempBoard := game.Board().Clone()
-			piece := tempBoard.PieceAt(game.Selected().Row, game.Selected().Col)
-			tempBoard.MovePiece(*game.Selected(), to)
-			piece.SetHasMoved(true)
+		if chess.IsValidMove(game.Board(), game.MoveLog(), from, to) {
+			piece := game.Board().PieceAt(from.Row, from.Col)
+			var promotion *chess.PieceType
 
-			// Handle castling
-			if piece.Type() == chess.King && chess.Abs(to.Col-game.Selected().Col) == 2 {
-				if to.Col > game.Selected().Col { // Kingside
-					tempBoard.MovePiece(chess.Position{Row: to.Row, Col: 7}, chess.Position{Row: to.Row, Col: to.Col - 1})
-				} else { // Queenside
-					tempBoard.MovePiece(chess.Position{Row: to.Row, Col: 0}, chess.Position{Row: to.Row, Col: to.Col + 1})
-				}
+			if piece.Type() == chess.Pawn && (to.Row == 0 || to.Row == 7) {
+				promoType := promptForPromotion()
+				promotion = &promoType
 			}
+			finalizeMove(from, to, *piece, promotion)
+		}
+	}
+}
 
-			// Check if the king is in check
-			if !chess.IsCheck(tempBoard, game.Turn()) {
-				game.MoveLog().AddMove(*game.Selected(), to, *piece)
-				game.SetBoard(tempBoard)
-				game.AddToBoardHistory(game.Board().Clone())
-				if game.Turn() == chess.White {
-					game.SetTurn(chess.Black)
-				} else {
-					game.SetTurn(chess.White)
-				}
+func finalizeMove(from, to chess.Position, piece chess.Piece, promotion *chess.PieceType) {
+	// Clone board to check for check
+	tempBoard := game.Board().Clone()
+	pieceAtTo := tempBoard.PieceAt(to.Row, to.Col)
+	isCapture := pieceAtTo != nil
+
+	// --- Make all moves on the temporary board ---
+	tempBoard.MovePiece(from, to)
+	movedPiece := tempBoard.PieceAt(to.Row, to.Col)
+	movedPiece.SetHasMoved(true)
+
+	// Handle en passant capture
+	if piece.Type() == chess.Pawn && to.Col != from.Col && pieceAtTo == nil {
+		isCapture = true
+		if piece.Color() == chess.White {
+			tempBoard.SetPieceAt(to.Row+1, to.Col, nil)
+		} else {
+			tempBoard.SetPieceAt(to.Row-1, to.Col, nil)
+		}
+	}
+
+	// Handle promotion
+	if promotion != nil {
+		movedPiece.SetType(*promotion)
+	}
+
+	// Handle castling
+	if piece.Type() == chess.King && chess.Abs(to.Col-from.Col) == 2 {
+		var rookFrom, rookTo chess.Position
+		if to.Col > from.Col { // Kingside
+			rookFrom = chess.Position{Row: to.Row, Col: 7}
+			rookTo = chess.Position{Row: to.Row, Col: to.Col - 1}
+		} else { // Queenside
+			rookFrom = chess.Position{Row: to.Row, Col: 0}
+			rookTo = chess.Position{Row: to.Row, Col: to.Col + 1}
+		}
+		tempBoard.MovePiece(rookFrom, rookTo)
+		rook := tempBoard.PieceAt(rookTo.Row, rookTo.Col)
+		rook.SetHasMoved(true)
+	}
+
+	// --- Validate and commit the move ---
+	if !chess.IsCheck(tempBoard, game.MoveLog(), game.Turn()) {
+		// Determine check/checkmate status AFTER the move
+		var checkStatus string
+		opponentColor := chess.White
+		if game.Turn() == chess.White {
+			opponentColor = chess.Black
+		}
+		if chess.IsCheckmate(tempBoard, game.MoveLog(), opponentColor) {
+			checkStatus = "++"
+		} else if chess.IsCheck(tempBoard, game.MoveLog(), opponentColor) {
+			checkStatus = "+"
+		}
+
+		game.MoveLog().AddMove(from, to, piece, isCapture, checkStatus)
+		game.SetBoard(tempBoard)
+		game.AddToBoardHistory(game.Board().Clone())
+		// Switch turn and update status message
+		if game.Turn() == chess.White {
+			game.SetTurn(chess.Black)
+		} else {
+			game.SetTurn(chess.White)
+		}
+		if checkStatus == "+" || checkStatus == "++" {
+			game.SetStatus("Check!")
+		} else {
+			game.SetStatus("")
+		}
+	}
+}
+
+func promptForPromotion() chess.PieceType {
+	drawEverything()
+	drawMessages("Promote to: [Q]ueen, [R]ook, [B]ishop, [K]night")
+	termbox.Flush()
+
+	for {
+		ev := termbox.PollEvent()
+		if ev.Type == termbox.EventKey {
+			switch strings.ToUpper(string(ev.Ch)) {
+			case "Q":
+				return chess.Queen
+			case "R":
+				return chess.Rook
+			case "B":
+				return chess.Bishop
+			case "K":
+				return chess.Knight
+			default:
+				continue
 			}
 		}
-		game.SetSelected(nil)
 	}
 }
 
 func drawBoard() {
-	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
-
 	// Draw column labels
 	for i := 0; i < 8; i++ {
 		termbox.SetCell(i*2+2, 0, rune('a'+i), termbox.ColorWhite, termbox.ColorDefault)
@@ -314,28 +397,34 @@ func drawBoard() {
 			termbox.SetCell(j*2+3, i+1, ' ', fg, bg)
 		}
 	}
+}
 
-	// Draw move log
-	for i := 0; i < len(game.MoveLog().Moves()); i += 2 {
-		row := (i / 2) + 1
-		moveNum := (i / 2) + 1
-		moveNumStr := fmt.Sprintf("%d. ", moveNum)
-		for j, r := range moveNumStr {
-			termbox.SetCell(20+j, row, r, termbox.ColorWhite, termbox.ColorDefault)
-		}
-
-		whiteMove := game.MoveLog().Moves()[i]
-		for j, r := range whiteMove.Notation() {
-			termbox.SetCell(20+j+len(moveNumStr), row, r, termbox.ColorWhite, termbox.ColorDefault)
-		}
-
-		if i+1 < len(game.MoveLog().Moves()) {
-			blackMove := game.MoveLog().Moves()[i+1]
-			for j, r := range blackMove.Notation() {
-				termbox.SetCell(35+j, row, r, termbox.ColorWhite, termbox.ColorDefault)
-			}
-		}
+func drawMoveLog() {
+	moves := game.MoveLog().Moves()
+	xOffset := 20
+	yOffsetStart := 1
+	_, termHeight := termbox.Size()
+	movesPerColumn := termHeight - yOffsetStart - 1
+	if movesPerColumn < 1 {
+		movesPerColumn = 1
 	}
 
-	termbox.Flush()
+	for i, move := range moves {
+		column := i / movesPerColumn
+		row := i % movesPerColumn
+
+		finalX := xOffset + (column * 15)
+		finalY := yOffsetStart + row
+
+		if finalY >= termHeight {
+			continue
+		}
+
+		moveNumStr := fmt.Sprintf("%d. ", i+1)
+		line := moveNumStr + move.Notation()
+
+		for j, r := range line {
+			termbox.SetCell(finalX+j, finalY, r, termbox.ColorWhite, termbox.ColorDefault)
+		}
+	}
 }

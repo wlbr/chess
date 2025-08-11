@@ -7,10 +7,12 @@ import (
 
 // Move represents a single move in the game
 type Move struct {
-	from     Position
-	to       Position
-	piece    Piece
-	notation string
+	from        Position
+	to          Position
+	piece       Piece
+	notation    string
+	isCapture   bool
+	checkStatus string
 }
 
 func (m *Move) Notation() string {
@@ -34,17 +36,37 @@ func NewMoveLog() *MoveLog {
 }
 
 // AddMove adds a move to the log
-func (ml *MoveLog) AddMove(from, to Position, piece Piece) {
+func (ml *MoveLog) AddMove(from, to Position, piece Piece, isCapture bool, checkStatus string) {
 	move := &Move{
-		from:  from,
-		to:    to,
-		piece: piece,
+		from:        from,
+		to:          to,
+		piece:       piece,
+		isCapture:   isCapture,
+		checkStatus: checkStatus,
 	}
 	move.notation = moveToAlgebraic(move)
 	ml.moves = append(ml.moves, move)
 }
 
+func (ml *MoveLog) LastMove() *Move {
+	if len(ml.moves) == 0 {
+		return nil
+	}
+	return ml.moves[len(ml.moves)-1]
+}
+
 func moveToAlgebraic(move *Move) string {
+	// Handle castling first
+	if move.piece.Type() == King {
+		dx := move.to.Col - move.from.Col
+		if dx == 2 {
+			return "O-O" + move.checkStatus
+		}
+		if dx == -2 {
+			return "O-O-O" + move.checkStatus
+		}
+	}
+
 	var sb strings.Builder
 
 	switch move.piece.Type() {
@@ -61,17 +83,24 @@ func moveToAlgebraic(move *Move) string {
 	}
 
 	sb.WriteString(fmt.Sprintf("%c%d", 'a'+move.from.Col, 8-move.from.Row))
-	sb.WriteString("-")
+	if move.isCapture {
+		sb.WriteString("x")
+	} else {
+		sb.WriteString("-")
+	}
 	sb.WriteString(fmt.Sprintf("%c%d", 'a'+move.to.Col, 8-move.to.Row))
+	sb.WriteString(move.checkStatus)
 
 	return sb.String()
 }
 
-func NewMove(from, to Position, piece Piece) *Move {
+func NewMove(from, to Position, piece Piece, isCapture bool, checkStatus string) *Move {
 	move := &Move{
-		from:  from,
-		to:    to,
-		piece: piece,
+		from:        from,
+		to:          to,
+		piece:       piece,
+		isCapture:   isCapture,
+		checkStatus: checkStatus,
 	}
 	move.notation = moveToAlgebraic(move)
 	return move
@@ -88,8 +117,15 @@ func (m *Move) To() Position {
 func AlgebraicToMove(board *Board, moveStr string) *Move {
 	fromCol := int(moveStr[0] - 'a')
 	fromRow := 8 - int(moveStr[1]-'0')
-	toCol := int(moveStr[2] - 'a')
-	toRow := 8 - int(moveStr[3]-'0')
+	isCapture := moveStr[2] == 'x'
+	var toCol, toRow int
+	if isCapture {
+		toCol = int(moveStr[3] - 'a')
+		toRow = 8 - int(moveStr[4]-'0')
+	} else {
+		toCol = int(moveStr[3] - 'a')
+		toRow = 8 - int(moveStr[4]-'0')
+	}
 
 	from := Position{Row: fromRow, Col: fromCol}
 	to := Position{Row: toRow, Col: toCol}
@@ -98,8 +134,9 @@ func AlgebraicToMove(board *Board, moveStr string) *Move {
 	// TODO: handle promotion
 
 	return &Move{
-		from:  from,
-		to:    to,
-		piece: *piece,
+		from:      from,
+		to:        to,
+		piece:     *piece,
+		isCapture: isCapture,
 	}
 }

@@ -47,10 +47,13 @@ func main() {
 				}
 			}
 		case "go":
-			from, to := chess.FindBestMove(game.Board(), game.Turn(), 5) // Using a depth of 5 for the UCI
+			from, to := chess.FindBestMove(game, 5) // Using a depth of 5 for the UCI
 			piece := game.Board().PieceAt(from.Row, from.Col)
-			move := chess.NewMove(from, to, *piece)
+			isCapture := game.Board().PieceAt(to.Row, to.Col) != nil
+			move := chess.NewMove(from, to, *piece, isCapture, "")
 			fmt.Printf("bestmove %s\n", move.Notation())
+
+
 		case "stop":
 			// TODO: implement stop command
 		case "quit":

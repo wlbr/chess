@@ -21,9 +21,7 @@ func ExportToPGN(moveLog *MoveLog) string {
 
 	// Move text
 	for i, move := range moveLog.moves {
-		if i%2 == 0 {
-			sb.WriteString(fmt.Sprintf("%d. ", (i/2)+1))
-		}
+		sb.WriteString(fmt.Sprintf("%d. ", i+1))
 		sb.WriteString(move.notation)
 		sb.WriteString(" ")
 	}

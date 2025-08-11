@@ -23,6 +23,10 @@ func (p *Piece) SetHasMoved(hasMoved bool) {
 	p.hasMoved = hasMoved
 }
 
+func (p *Piece) SetType(pt PieceType) {
+	p.pieceType = pt
+}
+
 func (p *Piece) Rune() rune {
 	switch p.pieceType {
 	case King:
@@ -95,6 +99,14 @@ func (b *Board) PieceAt(row, col int) *Piece {
 func (b *Board) MovePiece(from, to Position) {
 	b[to.Row][to.Col] = b[from.Row][from.Col]
 	b[from.Row][from.Col] = nil
+}
+
+func (b *Board) SetPieceAt(row, col int, p *Piece) {
+	b[row][col] = p
+}
+
+func NewPiece(pieceType PieceType, color Color) *Piece {
+	return &Piece{pieceType: pieceType, color: color, hasMoved: false}
 }
 
 func (b *Board) Clone() *Board {

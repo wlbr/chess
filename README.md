@@ -4,6 +4,10 @@
 Chess game with computer opponent. MinMax-Algorithm with Alpha-beta-Pruning. <br>
 Simple, but good enough to beat me.
 
+
+![Beginning of Kasparow vs. Deep Blue 1997](example.png)
+
+
 Special rules as
 
   * Rochade
@@ -19,4 +23,4 @@ Export to [portable game notation(PGN)](https://en.wikipedia.org/wiki/Portable_G
 [UCI (universal chess interface)](https://en.wikipedia.org/wiki/Universal_Chess_Interface) is unfinished.
 
 
-Use ESC to quit. Move with cursor keys and enter. Press e to export game to PGN.
+Use ESC to quit. Move with cursor keys and enter. Press 'e' to export game to PGN.

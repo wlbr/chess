@@ -53,7 +53,6 @@ func main() {
 			move := chess.NewMove(from, to, *piece, isCapture, "")
 			fmt.Printf("bestmove %s\n", move.Notation())
 
-
 		case "stop":
 			// TODO: implement stop command
 		case "quit":

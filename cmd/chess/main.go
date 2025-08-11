@@ -14,6 +14,7 @@ const (
 	boardHeight   = 9
 	messageRow    = boardHeight + 1
 	messageHeight = 4
+	AI_NAME       = "RabbitAI"
 )
 
 var game *chess.Game
@@ -78,6 +79,7 @@ func playVSPlayer() {
 
 func playAgainstAI() {
 	game = chess.NewGame()
+	game.SetVsAI(true)
 	gameLoop(true)
 }
 
@@ -189,7 +191,12 @@ func doExportPGN() string {
 	}
 
 	filename := "game.pgn"
-	pgn := chess.ExportToPGN(game.MoveLog())
+	white := "Player 1"
+	black := "Player 2"
+	if game.VsAI() {
+		black = AI_NAME
+	}
+	pgn := chess.ExportToPGN(game.MoveLog(), white, black)
 	file, err := os.Create(filename)
 	if err != nil {
 		return fmt.Sprintf("Error creating file: %s", err.Error())
@@ -403,25 +410,33 @@ func drawMoveLog() {
 	moves := game.MoveLog().Moves()
 	xOffset := 20
 	yOffsetStart := 1
+	movesPerColumn := 10 // A column contains 10 move pairs (20 moves)
+
 	_, termHeight := termbox.Size()
-	movesPerColumn := termHeight - yOffsetStart - 1
-	if movesPerColumn < 1 {
-		movesPerColumn = 1
-	}
 
-	for i, move := range moves {
-		column := i / movesPerColumn
-		row := i % movesPerColumn
+	for i := 0; i < len(moves); i += 2 {
+		moveNumber := i/2 + 1
 
-		finalX := xOffset + (column * 15)
+		// Calculate position based on move number (which is the line number)
+		column := (moveNumber - 1) / movesPerColumn
+		row := (moveNumber - 1) % movesPerColumn
+
+		finalX := xOffset + (column * 20) // 20 chars width per column
 		finalY := yOffsetStart + row
 
 		if finalY >= termHeight {
-			continue
+			continue // Don't draw outside of screen
 		}
 
-		moveNumStr := fmt.Sprintf("%d. ", i+1)
-		line := moveNumStr + move.Notation()
+		// White's move
+		whiteMove := moves[i]
+		line := fmt.Sprintf("%d. %s", moveNumber, whiteMove.Notation())
+
+		// Black's move (if it exists)
+		if i+1 < len(moves) {
+			blackMove := moves[i+1]
+			line += " " + blackMove.Notation()
+		}
 
 		for j, r := range line {
 			termbox.SetCell(finalX+j, finalY, r, termbox.ColorWhite, termbox.ColorDefault)

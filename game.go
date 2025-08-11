@@ -9,6 +9,15 @@ type Game struct {
 	moveLog      *MoveLog
 	boardHistory []*Board
 	status       string
+	vsAI         bool
+}
+
+func (g *Game) VsAI() bool {
+	return g.vsAI
+}
+
+func (g *Game) SetVsAI(vsAI bool) {
+	g.vsAI = vsAI
 }
 
 func (g *Game) Board() *Board {
@@ -73,5 +82,6 @@ func NewGame() *Game {
 		cursor:       &Position{Row: 0, Col: 0},
 		moveLog:      NewMoveLog(),
 		boardHistory: []*Board{NewBoard()},
+		vsAI:         false,
 	}
 }
